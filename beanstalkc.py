@@ -17,7 +17,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 '''
 
-__version__ = '0.3.0'
+__version__ = '0.3.1'
 
 import logging
 import socket
@@ -253,7 +253,7 @@ class Connection(object):
                                    ['NOT_FOUND'])
 
 
-def retry_socket_on_error(f):
+def retry_on_socket_error(f):
     def wrapper(self, *args):
         retries = 0
         while True:
@@ -293,15 +293,15 @@ class ConnectionSafe(Connection):
         self.block_until_success = block_until_success
         self.log = log
 
-    @retry_socket_on_error
+    @retry_on_socket_error
     def _interact(self, command, expected_ok, expected_err=[]):
         return Connection._interact(self, command, expected_ok, expected_err)
 
-    @retry_socket_on_error
+    @retry_on_socket_error
     def _interact_job(self, command, expected_ok, expected_err, reserved=True):
         return Connection._interact_job(self, command, expected_ok, expected_err, reserved=True)
 
-    @retry_socket_on_error
+    @retry_on_socket_error
     def _interact_yaml(self, command, expected_ok, expected_err=[]):
         return Connection._interact_yaml(self, command, expected_ok, expected_err)
 
