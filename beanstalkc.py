@@ -21,6 +21,7 @@ __version__ = '0.3.0'
 
 import logging
 import socket
+import time
 
 
 DEFAULT_HOST = 'localhost'
@@ -250,6 +251,59 @@ class Connection(object):
         return self._interact_yaml('stats-job %d\r\n' % jid,
                                    ['OK'],
                                    ['NOT_FOUND'])
+
+
+def retry_socket_on_error(f):
+    def wrapper(self, *args):
+        retries = 0
+        while True:
+            try:
+                if retries:
+                    self.reconnect()
+                return f(self, *args)
+            except SocketError as err:
+                if self.log:
+                    self.log.error("SocketError happened: %s" % err)
+                time.sleep(self.RETRY_DELAY_SECONDS)
+                retries += 1
+                if not self.block_until_success and retries >= self.MAX_RETRIES:
+                    raise SocketError('SocketError happened %s times' % retries)
+                continue
+    return wrapper
+
+
+class ConnectionSafe(Connection):
+    """
+    This connection implements safe behavior for commands
+    interacting with servers. It waits until results will be received from server.
+    If in the process Socket exceptions happen - it retries connection and request.
+
+    If block_until_success=True then it tries reconnect infinitely, otherwise it has
+     MAX_RETRIES being repeated each RETRY_DELAY_SECONDS.
+    """
+    MAX_RETRIES = 5
+    RETRY_DELAY_SECONDS = 1
+
+    def __init__(self, host=DEFAULT_HOST, port=DEFAULT_PORT, parse_yaml=True,
+                 connect_timeout=socket.getdefaulttimeout(),
+                 block_until_success=True,
+                 log=None):
+        super(ConnectionSafe, self).__init__(host, port, parse_yaml, connect_timeout)
+
+        self.block_until_success = block_until_success
+        self.log = log
+
+    @retry_socket_on_error
+    def _interact(self, command, expected_ok, expected_err=[]):
+        return Connection._interact(self, command, expected_ok, expected_err)
+
+    @retry_socket_on_error
+    def _interact_job(self, command, expected_ok, expected_err, reserved=True):
+        return Connection._interact_job(self, command, expected_ok, expected_err, reserved=True)
+
+    @retry_socket_on_error
+    def _interact_yaml(self, command, expected_ok, expected_err=[]):
+        return Connection._interact_yaml(self, command, expected_ok, expected_err)
 
 
 class Job(object):
