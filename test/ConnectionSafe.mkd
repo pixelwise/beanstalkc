@@ -1,0 +1,23 @@
+beanstalkc
+==========
+
+New Class called ConnectionSafe was added to the library.
+It provides non-interrupted execution of calls to servers, when servers does down
+or become unreachable over network. Call is simply blocked until server can be reached again.
+
+
+
+Usage
+-----
+
+Here is a short example, to illustrate the flavor of beanstalkc:
+
+    >>> import beanstalkc
+    >>> beanstalk = beanstalkc.ConnectionSafe(host='localhost', port=14711)
+    >>> beanstalk.put('hey!')
+    1
+    >>> job = beanstalk.reserve()
+    >>> job.body
+    'hey!'
+    >>> job.delete()
+
