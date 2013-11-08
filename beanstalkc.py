@@ -272,14 +272,16 @@ def retry_on_socket_error(f):
     return wrapper
 
 
-class ConnectionSafe(Connection):
+class NetworkSafeConnection(Connection):
     """
     This connection implements safe behavior for commands
     interacting with servers. It waits until results will be received from server.
     If in the process Socket exceptions happen - it retries connection and request.
 
+    You should run beanstalkd in jobs persistent mode (-b parameter)
+
     If block_until_success=True then it tries reconnect infinitely, otherwise it has
-     MAX_RETRIES being repeated each RETRY_DELAY_SECONDS.
+    MAX_RETRIES being repeated each RETRY_DELAY_SECONDS.
     """
     MAX_RETRIES = 5
     RETRY_DELAY_SECONDS = 1
@@ -288,10 +290,21 @@ class ConnectionSafe(Connection):
                  connect_timeout=socket.getdefaulttimeout(),
                  block_until_success=True,
                  log=None):
-        super(ConnectionSafe, self).__init__(host, port, parse_yaml, connect_timeout)
+        super(NetworkSafeConnection, self).__init__(host, port, parse_yaml, connect_timeout)
 
         self.block_until_success = block_until_success
         self.log = log
+        self._using = None
+        self._watching = []
+
+    def reconnect(self):
+        """Re-connect to server. Reuse and rewatch what was before."""
+        Connection.reconnect(self)
+        if self._using:
+            self.use(self._using)
+        if self._watching:
+            for name in self._watching:
+                self.watch(name)
 
     @retry_on_socket_error
     def _interact(self, command, expected_ok, expected_err=[]):
@@ -304,6 +317,28 @@ class ConnectionSafe(Connection):
     @retry_on_socket_error
     def _interact_yaml(self, command, expected_ok, expected_err=[]):
         return Connection._interact_yaml(self, command, expected_ok, expected_err)
+
+    def use(self, name):
+        """Use a given tube."""
+        self._using = name
+        return self._interact_value('use %s\r\n' % name, ['USING'])
+
+    def watch(self, name):
+        """Watch a given tube."""
+        if not name in self._watching:
+            self._watching.append(name)
+        return int(self._interact_value('watch %s\r\n' % name, ['WATCHING']))
+
+    def ignore(self, name):
+        """Stop watching a given tube."""
+        try:
+            return int(self._interact_value('ignore %s\r\n' % name,
+                                            ['WATCHING'],
+                                            ['NOT_IGNORED']))
+        except CommandFailed:
+            return 1
+        finally:
+            self._watching.remove(name)
 
 
 class Job(object):
