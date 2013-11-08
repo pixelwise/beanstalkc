@@ -15,10 +15,13 @@ Handling of network errors
 
 To get things going, we'll need to have a beanstalkd running:
 
-    >>> def launch_beanstalkd():
+    >>> import tempfile
+    >>> tmp_dir = tempfile.mkdtemp(prefix='beanstalkd_test')
+
+    >>> def launch_beanstalkd(tmp_dir):
     ...     pid = os.spawnlp(os.P_NOWAIT,
     ...                      'beanstalkd',
-    ...                      'beanstalkd', '-l', '127.0.0.1', '-p', '14712')
+    ...                      'beanstalkd', '-l', '127.0.0.1', '-p', '14712', '-b', tmp_dir)
     ...     time.sleep(0.2) # Give beanstalkd some time to start up.
     ...     return pid
 
@@ -26,7 +29,7 @@ To get things going, we'll need to have a beanstalkd running:
     ...     os.kill(pid, signal.SIGTERM)
     ...     time.sleep(0.2) # Also give beanstalkd some time to terminate.
 
-    >>> pid = launch_beanstalkd()
+    >>> pid = launch_beanstalkd(tmp_dir)
 
 Let's connect to this beanstalkd:
 
@@ -45,11 +48,11 @@ Let's use and watch some non-default tube:
 
 Put some data into 'test':
 
-    >>> b.put('1')
+    >>> b.put('first')
     1
-    >>> b.put('2')
-    2
-
+    >>> job = b.reserve()
+    >>> job.body
+    'first'
 
 Now, if beanstalkd goes away, the NetworkSafeConnection will be not affected:
 
@@ -57,9 +60,9 @@ Now, if beanstalkd goes away, the NetworkSafeConnection will be not affected:
 
 Instead, it will happily continue to work, once beanstalkd comes back up:
 
-    >>> pid = launch_beanstalkd()
+    >>> pid = launch_beanstalkd(tmp_dir)
 
-All data is gone because we haven't used persistent tubes (-b parameter for beanstalkd):
+All data is there since we launch benstalkd with persistent jobs mode (-b parameter):
 
     >>> from pprint import pprint
     >>> pprint(b.stats())                           # doctest: +ELLIPSIS
@@ -67,7 +70,7 @@ All data is gone because we haven't used persistent tubes (-b parameter for bean
      'current-connections': 1,
      'current-jobs-buried': 0,
      'current-jobs-delayed': 0,
-     'current-jobs-ready': 0,
+     'current-jobs-ready': 1,
      'current-jobs-reserved': 0,
      'current-jobs-urgent': 0,
      ...}
@@ -79,18 +82,30 @@ But we should be still using and watching the same tubes as before:
     >>> b.watching()
     ['default', 'test']
 
-Let's add something and remove it to prove that we have working client:
+You can see that the job we have reserved before is not reserved anymore, but we can delete it anyway.
 
-    >>> b.put('3')
-    1
-    >>> job = b.reserve()
-    >>> job.body
-    '3'
+    >>> pprint(job.stats())                         # doctest: +ELLIPSIS
+    {'age': 1,
+     ...
+     'state': 'ready',
+     ...
+     'tube': 'test'}
+
+Let's try to delete the job we have reserved before server died.
+
     >>> job.delete()
+    >>> job.stats()                                 # doctest: +ELLIPSIS
+    Traceback (most recent call last):
+    ...
+    CommandFailed: ('stats-job', 'NOT_FOUND', [])
+
+We don't have anything left in jobs tube
 
     >>> b.reserve(timeout=0) is None
     True
 
-Clean beanstalkd:
+Clean beanstalkd and remove temp dir:
 
     >>> kill_beanstalkd(pid)
+    >>> import shutil
+    >>> shutil.rmtree(tmp_dir)
