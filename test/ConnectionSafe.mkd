@@ -10,8 +10,6 @@ or become unreachable over network. Call is simply blocked until server can be r
 Usage
 -----
 
-Here is a short example, to illustrate the flavor of beanstalkc:
-
     >>> import beanstalkc
     >>> beanstalk = beanstalkc.ConnectionSafe(host='localhost', port=14711)
     >>> beanstalk.put('hey!')
