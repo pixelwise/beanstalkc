@@ -264,9 +264,9 @@ def retry_on_socket_error(f):
             except SocketError as err:
                 if self.log:
                     self.log.error("SocketError happened: %s" % err)
-                time.sleep(self.RETRY_DELAY_SECONDS)
+                time.sleep(self.retry_delay_seconds)
                 retries += 1
-                if not self.block_until_success and retries >= self.MAX_RETRIES:
+                if not self.block_until_success and retries >= self.max_retries:
                     raise SocketError('SocketError happened %s times' % retries)
                 continue
     return wrapper
@@ -283,19 +283,21 @@ class NetworkSafeConnection(Connection):
     If block_until_success=True then it tries reconnect infinitely, otherwise it has
     MAX_RETRIES being repeated each RETRY_DELAY_SECONDS.
     """
-    MAX_RETRIES = 5
-    RETRY_DELAY_SECONDS = 1
 
     def __init__(self, host=DEFAULT_HOST, port=DEFAULT_PORT, parse_yaml=True,
                  connect_timeout=socket.getdefaulttimeout(),
                  block_until_success=True,
+                 max_retries=5,
+                 retry_delay_seconds=0.2,
                  log=None):
         super(NetworkSafeConnection, self).__init__(host, port, parse_yaml, connect_timeout)
 
         self.block_until_success = block_until_success
+        self.max_retries = max_retries
+        self.retry_delay_seconds = retry_delay_seconds
         self.log = log
-        self._using = None
-        self._watching = []
+        self._using = 'default'
+        self._watching = ['default']
 
     def reconnect(self):
         """Re-connect to server. Reuse and rewatch what was before."""
@@ -338,7 +340,8 @@ class NetworkSafeConnection(Connection):
         except CommandFailed:
             return 1
         finally:
-            self._watching.remove(name)
+            if name in self._watching:
+                self._watching.remove(name)
 
 
 class Job(object):
