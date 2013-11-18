@@ -21,7 +21,7 @@ To get things going, we'll need to have a beanstalkd running:
     >>> def launch_beanstalkd(tmp_dir):
     ...     pid = os.spawnlp(os.P_NOWAIT,
     ...                      'beanstalkd',
-    ...                      'beanstalkd', '-l', '127.0.0.1', '-p', '14712', '-b', tmp_dir)
+    ...                      'beanstalkd', '-l', '127.0.0.1', '-p', '14711', '-b', tmp_dir)
     ...     time.sleep(0.2) # Give beanstalkd some time to start up.
     ...     return pid
 
@@ -33,7 +33,7 @@ To get things going, we'll need to have a beanstalkd running:
 
 Let's connect to this beanstalkd:
 
-    >>> b = beanstalkc.NetworkSafeConnection(port=14712)
+    >>> b = beanstalkc.NetworkSafeConnection(port=14711)
 
 Let's use and watch some non-default tube:
 
