@@ -2,7 +2,7 @@
 """beanstalkc - A beanstalkd Client Library for Python"""
 
 __license__ = '''
-Copyright (C) 2008-2012 Andreas Bolka
+Copyright (C) 2008-2014 Andreas Bolka
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 '''
 
-__version__ = '0.3.1'
+__version__ = '0.4.1'
 
 import logging
 import socket
@@ -131,10 +131,10 @@ class Connection(object):
     def put(self, body, priority=DEFAULT_PRIORITY, delay=0, ttr=DEFAULT_TTR):
         """Put a job into the current tube. Returns job id."""
         assert isinstance(body, str), 'Job body must be a str instance'
-        jid = self._interact_value(
-                'put %d %d %d %d\r\n%s\r\n' %
-                    (priority, delay, ttr, len(body), body),
-                ['INSERTED', 'BURIED'], ['JOB_TOO_BIG'])
+        jid = self._interact_value('put %d %d %d %d\r\n%s\r\n' % (
+                                       priority, delay, ttr, len(body), body),
+                                   ['INSERTED'],
+                                   ['JOB_TOO_BIG', 'BURIED', 'DRAINING'])
         return int(jid)
 
     def reserve(self, timeout=None):
