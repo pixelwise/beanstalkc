@@ -4,7 +4,7 @@
 import logging
 import socket
 import sys
-
+import time
 
 __license__ = '''
 Copyright (C) 2008-2015 Andreas Bolka
@@ -22,7 +22,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 '''
 
-__version__ = '0.4.0'
+__version__ = '0.4.1'
 
 
 DEFAULT_HOST = 'localhost'
@@ -261,6 +261,97 @@ class Connection(object):
         return self._interact_yaml('stats-job %d\r\n' % jid,
                                    ['OK'],
                                    ['NOT_FOUND'])
+
+
+def retry_on_socket_error(f):
+    def wrapper(self, *args):
+        retries = 0
+        while True:
+            try:
+                if retries:
+                    self.reconnect()
+                return f(self, *args)
+            except SocketError as err:
+                if self.log:
+                    self.log.error("SocketError happened: %s" % err)
+                time.sleep(self.retry_delay_seconds)
+                retries += 1
+                if not self.block_until_success and retries >= self.max_retries:
+                    raise SocketError('SocketError happened %s times' % retries)
+                continue
+    return wrapper
+
+
+class NetworkSafeConnection(Connection):
+    """
+    This connection implements safe behavior for commands
+    interacting with servers. It waits until results will be received from server.
+    If in the process Socket exceptions happen - it retries connection and request.
+
+    You should run beanstalkd in jobs persistent mode (-b parameter)
+
+    If block_until_success=True then it tries reconnect infinitely, otherwise it has
+    MAX_RETRIES being repeated each RETRY_DELAY_SECONDS.
+    """
+
+    def __init__(self, host=DEFAULT_HOST, port=DEFAULT_PORT, parse_yaml=True,
+                 connect_timeout=socket.getdefaulttimeout(),
+                 block_until_success=True,
+                 max_retries=5,
+                 retry_delay_seconds=0.2,
+                 log=None):
+        super(NetworkSafeConnection, self).__init__(host, port, parse_yaml, connect_timeout)
+
+        self.block_until_success = block_until_success
+        self.max_retries = max_retries
+        self.retry_delay_seconds = retry_delay_seconds
+        self.log = log
+        self._using = 'default'
+        self._watching = ['default']
+
+    def reconnect(self):
+        """Re-connect to server. Reuse and rewatch what was before."""
+        Connection.reconnect(self)
+        if self._using:
+            self.use(self._using)
+        if self._watching:
+            for name in self._watching:
+                self.watch(name)
+
+    @retry_on_socket_error
+    def _interact(self, command, expected_ok, expected_err=[]):
+        return Connection._interact(self, command, expected_ok, expected_err)
+
+    @retry_on_socket_error
+    def _interact_job(self, command, expected_ok, expected_err, reserved=True):
+        return Connection._interact_job(self, command, expected_ok, expected_err, reserved=True)
+
+    @retry_on_socket_error
+    def _interact_yaml(self, command, expected_ok, expected_err=[]):
+        return Connection._interact_yaml(self, command, expected_ok, expected_err)
+
+    def use(self, name):
+        """Use a given tube."""
+        self._using = name
+        return self._interact_value('use %s\r\n' % name, ['USING'])
+
+    def watch(self, name):
+        """Watch a given tube."""
+        if not name in self._watching:
+            self._watching.append(name)
+        return int(self._interact_value('watch %s\r\n' % name, ['WATCHING']))
+
+    def ignore(self, name):
+        """Stop watching a given tube."""
+        try:
+            return int(self._interact_value('ignore %s\r\n' % name,
+                                            ['WATCHING'],
+                                            ['NOT_IGNORED']))
+        except CommandFailed:
+            return 1
+        finally:
+            if name in self._watching:
+                self._watching.remove(name)
 
 
 class Job(object):
