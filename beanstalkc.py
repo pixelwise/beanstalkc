@@ -57,7 +57,7 @@ class SocketError(BeanstalkcException):
 
 class Connection(object):
     def __init__(self, host=DEFAULT_HOST, port=DEFAULT_PORT, parse_yaml=True,
-                 connect_timeout=socket.getdefaulttimeout(), encoding=sys.getdefaultencoding()):
+                 connect_timeout=socket.getdefaulttimeout(), encoding=None):
         if parse_yaml is True:
             try:
                 parse_yaml = __import__('yaml').load
