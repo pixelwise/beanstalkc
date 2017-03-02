@@ -61,25 +61,29 @@ receive a job. If such a `reserve` times out, it will return `None`:
 If you use a timeout of 0, `reserve` will immediately return either a job or
 `None`.
 
-Note that beanstalkc requires job bodies to be strings, conversion to/from
-strings is left up to you:
+Note that beanstalkc requires job bodies to be strings or bytes objects:
 
     >>> beanstalk.put(42)
     Traceback (most recent call last):
     ...
-    AssertionError: Job body must be a str instance
+    ValueError: Job body must be a str or bytes instance
 
 There is no restriction on what characters you can put in a job body, so they
 can be used to hold arbitrary binary data:
 
-    >>> _ = beanstalk.put('\x00\x01\xfe\xff')
-    >>> job = beanstalk.reserve() ; print(repr(job.body)) ; job.delete()
+    >>> beanstalk_binary = beanstalkc.Connection(host='localhost', port=14711, encoding=None)
+    >>> _ = beanstalk.put(b'\x00\x01\xfe\xff')
+    >>> job = beanstalk_binary.reserve() ; print(repr(job.body).replace('b','')) ; job.delete()
     '\x00\x01\xfe\xff'
 
-If you want to send images, just `put` the image data as a string. If you want
-to send Unicode text, just use `unicode.encode` to convert it to a string with
-some encoding.
-
+When using python 2, bytes and string objects can be used for input
+interchangably, and reserve will return string objects. Because python 3 is
+stricter when it comes to encodings, the rules are slightly different there and
+you you can specify an encoding to be used for job bodies. This encoding
+defaults to your system's default encoding and can be set to `None` if you do
+not want beanstalkc to try to encode/decode job bodies. In that case, `put`
+will only accept bytes objects and `reserve` and the `peek` functions will
+return bytes objects.
 
 Tube Management
 ---------------
@@ -214,7 +218,7 @@ the `Connection`'s `stats` method. We won't go into details here, but:
 
     >>> pprint(beanstalk.stats())                   # doctest: +ELLIPSIS
     {...
-     'current-connections': 1,
+     'current-connections': 2,
      'current-jobs-buried': 0,
      'current-jobs-delayed': 0,
      'current-jobs-ready': 0,
