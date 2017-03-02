@@ -44,5 +44,5 @@ release: clean
 
 dist: clean
 	python setup.py sdist
-	python setup.py bdist_wheel
+	python setup.py bdist_wheel --universal
 	ls -l dist
