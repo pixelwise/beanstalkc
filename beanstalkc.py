@@ -326,6 +326,13 @@ class NetworkSafeConnection(Connection):
         self._using = 'default'
         self._watching = ['default']
 
+    def connect(self):
+        """Connect to beanstalkd server."""
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._socket.settimeout(self._connect_timeout)
+        SocketError.wrap(self._socket.connect, (self.host, self.port))
+        self._socket_file = self._socket.makefile('rb')
+
     def reconnect(self):
         """Re-connect to server. Reuse and rewatch what was before."""
         Connection.reconnect(self)
